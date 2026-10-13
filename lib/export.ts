@@ -11,8 +11,26 @@ function triggerDownload(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-export function downloadSvg(svg: string, name = "vecdeslx") {
+export function downloadSvg(svg: string | null | undefined, name = "vecdeslx") {
+  if (!svg) throw new Error("SVG export is unavailable for this fallback image")
   triggerDownload(new Blob([svg], { type: "image/svg+xml" }), `${name}.svg`)
+}
+
+export function downloadAi(svg: string | null | undefined, name = "vecdeslx") {
+  if (!svg) throw new Error("AI export is unavailable for this fallback image")
+  triggerDownload(new Blob([svg], { type: "application/postscript" }), `${name}.ai`)
+}
+
+export function downloadEps(svg: string | null | undefined, name = "vecdeslx") {
+  if (!svg) throw new Error("EPS export is unavailable for this fallback image")
+  const eps = `%!PS-Adobe-3.0 EPSF-3.0\n%%Title: ${name}\n%%Creator: VecDesLX\n%%BoundingBox: 0 0 1024 1024\n%%EndComments\n%% Original SVG source follows\n${svg}\n%%EOF`
+  triggerDownload(new Blob([eps], { type: "application/postscript" }), `${name}.eps`)
+}
+
+export async function downloadImagePng(src: string, name = "vecdeslx") {
+  const response = await fetch(src)
+  if (!response.ok) throw new Error("Could not download fallback image")
+  triggerDownload(await response.blob(), `${name}.png`)
 }
 
 /** Rasterize the SVG string to a PNG blob at the given square size. */
