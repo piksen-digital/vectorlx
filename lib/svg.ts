@@ -28,3 +28,13 @@ export function extractSvg(raw: string): string | null {
 
   return svg.trim()
 }
+
+/** Conservative, lossless cleanup for generated SVG files. */
+export function optimizeSvg(svg: string): string {
+  return svg
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/>\s+</g, "><")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s*([=,])\s*/g, "$1")
+    .trim()
+}

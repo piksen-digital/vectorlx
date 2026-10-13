@@ -84,6 +84,22 @@ function toPascalCase(name: string) {
 }
 
 /** Convert an SVG string into a React (TSX) component and download it. */
+export async function downloadMasterPackage(svg: string, name = "vecdeslx", metadata: Record<string, unknown> = {}) {
+  const [{ default: JSZip }] = await Promise.all([import("jszip")])
+  const zip = new JSZip()
+  zip.file(`${name}.svg`, svg)
+  zip.file(`${name}.tsx`, buildReactComponentFile(svg, name))
+  zip.file("README.txt", `VecDesLX Master Package\\n\\nGenerated asset: ${name}\\nIncludes SVG source and React component.\\n\\n${JSON.stringify(metadata, null, 2)}`)
+  const blob = await zip.generateAsync({ type: "blob" })
+  triggerDownload(blob, `${name}-master-package.zip`)
+}
+
+function buildReactComponentFile(svg: string, name: string) {
+  const componentName = toPascalCase(name)
+  const jsx = svg.replace(/<!--[\\s\\S]*?-->/g, "").replace(/\\b([a-z]+)-([a-z])/g, (_m, a, b) => `${a}${b.toUpperCase()}`).replace(/class=/g, "className=").replace(/<svg([^>]*)>/i, (_m, attrs) => `<svg${attrs} {...props}>`)
+  return `import type { SVGProps } from "react"\\n\\nexport function ${componentName}(props: SVGProps<SVGSVGElement>) {\\n  return (\\n    ${jsx.trim()}\\n  )\\n}\\n\\nexport default ${componentName}\\n`
+}
+
 export function downloadReactComponent(svg: string, name = "vecdeslx") {
   const componentName = toPascalCase(name)
 

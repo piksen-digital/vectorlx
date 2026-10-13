@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Check, Copy, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { downloadIco, downloadPng, downloadReactComponent, downloadSvg } from "@/lib/export"
+import { downloadIco, downloadMasterPackage, downloadPng, downloadReactComponent, downloadSvg } from "@/lib/export"
 
 const FORMATS = [
   { key: "svg", label: "SVG" },
@@ -49,6 +49,9 @@ export function ExportBar({ svg, name }: { svg: string; name: string }) {
         {copied ? "Copied" : "Copy code"}
       </Button>
       <div className="mx-1 h-4 w-px bg-border" />
+      <Button variant="default" size="sm" disabled={busy !== null} onClick={() => { setBusy("svg"); downloadMasterPackage(svg, name).finally(() => setBusy(null)) }} className="gap-1.5 text-xs">
+        <Download className="size-3.5" />Master ZIP
+      </Button>
       {FORMATS.map((f) => (
         <Button
           key={f.key}
