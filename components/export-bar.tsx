@@ -24,7 +24,7 @@ export function ExportBar({ svg, imageSrc, name }: { svg?: string | null; imageS
     setBusy(key)
     try {
       const sourceSvg = svg ?? ""
-      if (key === "svg") imageSrc ? await downloadImagePng(imageSrc, name) : downloadSvg(sourceSvg, name)
+      if (key === "svg") downloadSvg(sourceSvg, name)
       else if (key === "ai") downloadAi(sourceSvg, name)
       else if (key === "eps") downloadEps(sourceSvg, name)
       else if (key === "png") imageSrc ? await downloadImagePng(imageSrc, name) : await downloadPng(sourceSvg, name)

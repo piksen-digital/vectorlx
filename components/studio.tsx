@@ -32,6 +32,7 @@ export function Studio() {
   const [image, setImage] = useState<string | null>(null)
   const [svg, setSvg] = useState<string | null>(null)
   const [puterImage, setPuterImage] = useState<PuterImage | null>(null)
+  const [puterSvg, setPuterSvg] = useState<string | null>(null)
   const [provider, setProvider] = useState<"gemini" | "puter" | null>(null)
   const [quality, setQuality] = useState<ReturnType<typeof scoreSvg> | null>(null)
   const [dna, setDna] = useState<VisualDNA | null>(null)
@@ -56,7 +57,7 @@ export function Studio() {
 
   async function generate() {
     if (!canGenerate || loading) return
-    setLoading(true); setError(null); setSvg(null); setPuterImage(null); setProvider(null); setQuality(null); setCritique([])
+    setLoading(true); setError(null); setSvg(null); setPuterImage(null); setPuterSvg(null); setProvider(null); setQuality(null); setCritique([])
     try {
       const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, styleId, typeId, visualDna: dna, image: mode === "image" ? image : null }) })
       const data = await res.json(); if (!res.ok) throw new Error(data.error ?? "Generation failed.")
@@ -66,9 +67,10 @@ export function Studio() {
         try {
           const preset = STYLE_PRESETS.find((item) => item.id === styleId)
           const type = DESIGN_TYPES.find((item) => item.id === typeId)
-          const fallbackPrompt = `${prompt}. ${type?.instruction ?? "clean vector artwork"}. ${preset?.instruction ?? "minimal, polished design"}. Generate a crisp image with a simple background.`
+          const fallbackPrompt = `CURRENT REQUEST ONLY — ignore any previous prompts, generated images, or conversation history. Generate this image from the instructions below and nothing else: ${prompt}. Design type: ${type?.instruction ?? "clean vector artwork"}. Style: ${preset?.instruction ?? "minimal, polished design"}. Create a crisp, centered graphic with a simple background.`
           const generated = await window.puter.ai.txt2img(fallbackPrompt)
-          setPuterImage({ src: generated.src }); setProvider("puter"); setWorkspace("generate")
+          const generatedSvg = imageToSvg(generated.src)
+          setPuterImage({ src: generated.src }); setPuterSvg(generatedSvg); setProvider("puter"); setWorkspace("generate")
         } catch (fallbackError) {
           console.log("[v0] Puter fallback error:", fallbackError)
           setError(err instanceof Error ? `${err.message} Puter fallback also failed.` : "Generation failed.")
@@ -110,7 +112,7 @@ export function Studio() {
         {dna && <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Visual DNA active</span><br />{dna.summary || "Brand language will be applied to this generation."}</div>}
         <Button onClick={generate} disabled={!canGenerate || loading} size="lg" className="mt-1 w-full gap-2 text-base">{loading ? <><LoaderCircle className="size-4 animate-spin" />Generating…</> : <><WandSparkles className="size-4" />Generate SVG</>}</Button>{error && <p className="text-sm text-destructive">{error}</p>}
       </section>
-      <section className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3"><div className="flex items-center gap-2"><span className="text-sm font-medium text-muted-foreground">Preview</span>{provider && <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{provider === "gemini" ? "Gemini SVG" : "Puter fallback"}</span>}</div>{svg && <ExportBar svg={svg} name={slugify(prompt) || "vecdeslx"} />}</div><div className="relative flex flex-1 items-center justify-center p-8"><Checkerboard />{svg ? <div className="relative z-10 aspect-square w-full max-w-[420px] [&>svg]:size-full [&>svg]:drop-shadow-xl" dangerouslySetInnerHTML={{ __html: svg }} /> : puterImage ? <div className="relative z-10 flex w-full max-w-[420px] flex-col items-center gap-3"><img src={puterImage.src} alt="AI-generated fallback artwork" className="max-h-[420px] w-full rounded-xl object-contain shadow-xl" /><p className="text-xs text-muted-foreground">Generated with Puter as a no-key fallback. Export as an image from your browser.</p></div> : <EmptyState loading={loading} />}</div></section>
+      <section className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3"><div className="flex items-center gap-2"><span className="text-sm font-medium text-muted-foreground">Preview</span>{provider && <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{provider === "gemini" ? "Gemini SVG" : "Puter fallback"}</span>}</div>{(svg || puterImage) && <ExportBar svg={svg ?? puterSvg} imageSrc={puterImage?.src} name={slugify(prompt) || "vecdeslx"} />}</div><div className="relative flex flex-1 items-center justify-center p-8"><Checkerboard />{svg ? <div className="relative z-10 aspect-square w-full max-w-[420px] [&>svg]:size-full [&>svg]:drop-shadow-xl" dangerouslySetInnerHTML={{ __html: svg }} /> : puterImage ? <div className="relative z-10 flex w-full max-w-[420px] flex-col items-center gap-3"><img src={puterImage.src} alt="AI-generated fallback artwork" className="max-h-[420px] w-full rounded-xl object-contain shadow-xl" /><p className="text-xs text-muted-foreground">Generated with Puter as a no-key fallback. Export as an image from your browser.</p></div> : <EmptyState loading={loading} />}</div></section>
     </div>}
   </div>
 }
@@ -128,4 +130,9 @@ function ModeButton({ active, onClick, icon, children }: { active: boolean; onCl
 function ImageDropzone({ image, onPick, onClear, openPicker, fileRef }: { image: string | null; onPick: (file?: File | null) => void; onClear: () => void; openPicker: () => void; fileRef: React.RefObject<HTMLInputElement | null> }) { const [dragging, setDragging] = useState(false); return <div>{<input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => onPick(e.target.files?.[0])} />}{image ? <div className="relative overflow-hidden rounded-xl border border-border bg-background"><img src={image} alt="Source to vectorize" className="mx-auto max-h-56 object-contain" /><button type="button" onClick={onClear} aria-label="Remove image" className="absolute right-2 top-2 rounded-full bg-background/80 p-1.5 hover:bg-destructive hover:text-white"><X className="size-4" /></button></div> : <button type="button" onClick={openPicker} onDragOver={(e) => { e.preventDefault(); setDragging(true) }} onDragLeave={() => setDragging(false)} onDrop={(e) => { e.preventDefault(); setDragging(false); onPick(e.dataTransfer.files?.[0]) }} className={cn("flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-8 text-center", dragging ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/50")}><ImageUp className="size-6 text-muted-foreground" /><span className="text-sm font-medium">Drop an image or click to upload</span><span className="text-xs text-muted-foreground">PNG, JPG, or WEBP</span></button>}</div> }
 function EmptyState({ loading }: { loading: boolean }) { return <div className="relative z-10 flex flex-col items-center gap-3 text-center"><div className="flex size-14 items-center justify-center rounded-2xl bg-primary/15 text-primary">{loading ? <LoaderCircle className="size-6 animate-spin" /> : <Sparkles className="size-6" />}</div><p className="max-w-xs text-sm text-muted-foreground">{loading ? "Drawing your vector…" : "Your generated SVG will appear here, ready to tweak and export."}</p></div> }
 function Checkerboard() { return <div aria-hidden className="pointer-events-none absolute inset-0 opacity-[0.04]" style={{ backgroundImage: "linear-gradient(45deg,#fff 25%,transparent 25%),linear-gradient(-45deg,#fff 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#fff 75%),linear-gradient(-45deg,transparent 75%,#fff 75%)", backgroundSize: "24px 24px", backgroundPosition: "0 0,0 12px,12px -12px,-12px 0" }} /> }
+function imageToSvg(src: string) {
+  const safeSrc = src.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024" role="img"><image width="1024" height="1024" preserveAspectRatio="xMidYMid meet" href="${safeSrc}" xlink:href="${safeSrc}" /></svg>`
+}
+
 function slugify(text: string) { return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) }
