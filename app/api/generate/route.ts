@@ -8,6 +8,8 @@ export const maxDuration = 60
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash"
 
+type ImagePart = { bytes: Uint8Array; mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif" }
+
 type GenerateBody = {
   prompt?: string
   styleId?: string | null
@@ -15,6 +17,14 @@ type GenerateBody = {
   visualDna?: VisualDNA | null
   // data URL: "data:image/png;base64,...."
   image?: string | null
+}
+
+function parseImageDataUrl(value: string): ImagePart | null {
+  const match = value.match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=\s]+)$/)
+  if (!match) return null
+  const binary = atob(match[2].replace(/\s/g, ""))
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
+  return { bytes, mediaType: match[1] as ImagePart["mediaType"] }
 }
 
 export async function POST(req: Request) {
@@ -47,11 +57,16 @@ export async function POST(req: Request) {
     visualDna: body.visualDna ?? null,
   })
 
+  const imagePart = image ? parseImageDataUrl(image) : null
   const userText = image
-    ? `Recreate the attached image as a clean vector SVG. Faithfully capture its shapes, composition, and colors while simplifying it into crisp vector geometry.${
-        prompt ? ` Additional direction: ${prompt}` : ""
+    ? `Analyze the attached reference image first, then recreate it as a genuinely editable vector SVG. Use SVG paths and vector primitives for the visible shapes—not a raster image, base64 image, or embedded bitmap. Faithfully preserve the reference's subject, silhouette, layout, proportions, colors, and important details. The attached image is the source of truth; do not use unrelated historical context or previous requests.${
+        prompt ? ` Current additional direction only: ${prompt}` : ""
       }`
     : `Create an SVG of: ${prompt}`
+
+  if (image && !imagePart) {
+    return Response.json({ error: "The uploaded image could not be decoded. Please try PNG, JPG, or WEBP." }, { status: 400 })
+  }
 
   try {
     const { text } = await generateText({
@@ -63,7 +78,7 @@ export async function POST(req: Request) {
           content: image
             ? [
                 { type: "text", text: userText },
-                { type: "image", image },
+                { type: "image", image: imagePart!.bytes, mediaType: imagePart!.mediaType },
               ]
             : [{ type: "text", text: userText }],
         },
