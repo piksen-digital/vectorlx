@@ -33,7 +33,7 @@ export function Studio() {
   const [svg, setSvg] = useState<string | null>(null)
   const [puterImage, setPuterImage] = useState<PuterImage | null>(null)
   const [puterSvg, setPuterSvg] = useState<string | null>(null)
-  const [provider, setProvider] = useState<"gemini" | "puter" | null>(null)
+  const [provider, setProvider] = useState<"puter" | null>(null)
   const [quality, setQuality] = useState<ReturnType<typeof scoreSvg> | null>(null)
   const [dna, setDna] = useState<VisualDNA | null>(null)
   const [dnaImages, setDnaImages] = useState<string[]>([])
@@ -59,25 +59,25 @@ export function Studio() {
     if (!canGenerate || loading) return
     setLoading(true); setError(null); setSvg(null); setPuterImage(null); setPuterSvg(null); setProvider(null); setQuality(null); setCritique([])
     try {
-      const res = await fetch("/api/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, styleId, typeId, visualDna: dna, image: mode === "image" ? image : null }) })
-      const data = await res.json(); if (!res.ok) throw new Error(data.error ?? "Generation failed.")
-      setSvg(data.svg); setQuality(data.quality); setProvider("gemini"); setWorkspace("generate")
-    } catch (err) {
-      if (mode === "text" && window.puter?.ai?.txt2img) {
-        try {
-          const preset = STYLE_PRESETS.find((item) => item.id === styleId)
-          const type = DESIGN_TYPES.find((item) => item.id === typeId)
-          const fallbackPrompt = `CURRENT REQUEST ONLY — ignore any previous prompts, generated images, or conversation history. Generate this image from the instructions below and nothing else: ${prompt}. Design type: ${type?.instruction ?? "clean vector artwork"}. Style: ${preset?.instruction ?? "minimal, polished design"}. Create a crisp, centered graphic with a simple background.`
-          const generated = await window.puter.ai.txt2img(fallbackPrompt)
-          const generatedSvg = imageToSvg(generated.src)
-          setPuterImage({ src: generated.src }); setPuterSvg(generatedSvg); setProvider("puter"); setWorkspace("generate")
-        } catch (fallbackError) {
-          console.log("[v0] Puter fallback error:", fallbackError)
-          setError(err instanceof Error ? `${err.message} Puter fallback also failed.` : "Generation failed.")
-        }
-      } else {
-        setError(err instanceof Error ? err.message : "Something went wrong.")
+      if (mode === "image") {
+        throw new Error("Puter's no-key image generator cannot read uploaded reference images. Use Text mode for Puter generation.")
       }
+      if (!window.puter?.ai?.txt2img) {
+        throw new Error("Puter is still loading. Please try again in a moment.")
+      }
+      const preset = STYLE_PRESETS.find((item) => item.id === styleId)
+      const type = DESIGN_TYPES.find((item) => item.id === typeId)
+      const currentRequest = prompt.trim()
+      const puterPrompt = `CURRENT REQUEST ONLY. Ignore all previous prompts, generated images, conversation history, and cached context. Generate only the following new graphic: ${currentRequest}. Design type: ${type?.instruction ?? "clean vector artwork"}. Style: ${preset?.instruction ?? "minimal, polished design"}. Create a crisp, centered composition with a simple background. Do not reuse or reference any earlier request.`
+      const generated = await window.puter.ai.txt2img(puterPrompt)
+      const generatedSvg = imageToSvg(generated.src)
+      setPuterImage({ src: generated.src })
+      setPuterSvg(generatedSvg)
+      setProvider("puter")
+      setWorkspace("generate")
+    } catch (err) {
+      console.log("[v0] Puter generation error:", err)
+      setError(err instanceof Error ? err.message : "Generation failed.")
     } finally { setLoading(false) }
   }
 
@@ -110,9 +110,9 @@ export function Studio() {
         <SelectGrid label="Design type" items={DESIGN_TYPES} value={typeId} onChange={setTypeId} />
         <SelectGrid label="Style" items={STYLE_PRESETS} value={styleId} onChange={setStyleId} />
         {dna && <div className="rounded-xl border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground"><span className="font-medium text-foreground">Visual DNA active</span><br />{dna.summary || "Brand language will be applied to this generation."}</div>}
-        <Button onClick={generate} disabled={!canGenerate || loading} size="lg" className="mt-1 w-full gap-2 text-base">{loading ? <><LoaderCircle className="size-4 animate-spin" />Generating…</> : <><WandSparkles className="size-4" />Generate SVG</>}</Button>{error && <p className="text-sm text-destructive">{error}</p>}
+        <Button onClick={generate} disabled={!canGenerate || loading} size="lg" className="mt-1 w-full gap-2 text-base">{loading ? <><LoaderCircle className="size-4 animate-spin" />Generating…</> : <><WandSparkles className="size-4" />Generate graphic</>}</Button>{error && <p className="text-sm text-destructive">{error}</p>}
       </section>
-      <section className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3"><div className="flex items-center gap-2"><span className="text-sm font-medium text-muted-foreground">Preview</span>{provider && <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">{provider === "gemini" ? "Gemini SVG" : "Puter fallback"}</span>}</div>{(svg || puterImage) && <ExportBar svg={svg ?? puterSvg} imageSrc={puterImage?.src} name={slugify(prompt) || "vecdeslx"} />}</div><div className="relative flex flex-1 items-center justify-center p-8"><Checkerboard />{svg ? <div className="relative z-10 aspect-square w-full max-w-[420px] [&>svg]:size-full [&>svg]:drop-shadow-xl" dangerouslySetInnerHTML={{ __html: svg }} /> : puterImage ? <div className="relative z-10 flex w-full max-w-[420px] flex-col items-center gap-3"><img src={puterImage.src} alt="AI-generated fallback artwork" className="max-h-[420px] w-full rounded-xl object-contain shadow-xl" /><p className="text-xs text-muted-foreground">Generated with Puter as a no-key fallback. Export as an image from your browser.</p></div> : <EmptyState loading={loading} />}</div></section>
+      <section className="flex min-h-[420px] flex-col overflow-hidden rounded-2xl border border-border bg-card"><div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3"><div className="flex items-center gap-2"><span className="text-sm font-medium text-muted-foreground">Preview</span>{provider && <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Puter AI</span>}</div>{(svg || puterImage) && <ExportBar svg={svg ?? puterSvg} imageSrc={puterImage?.src} name={slugify(prompt) || "vecdeslx"} />}</div><div className="relative flex flex-1 items-center justify-center p-8"><Checkerboard />{svg ? <div className="relative z-10 aspect-square w-full max-w-[420px] [&>svg]:size-full [&>svg]:drop-shadow-xl" dangerouslySetInnerHTML={{ __html: svg }} /> : puterImage ? <div className="relative z-10 flex w-full max-w-[420px] flex-col items-center gap-3"><img src={puterImage.src} alt="AI-generated fallback artwork" className="max-h-[420px] w-full rounded-xl object-contain shadow-xl" /><p className="text-xs text-muted-foreground">Generated with Puter as a no-key fallback. Export as an image from your browser.</p></div> : <EmptyState loading={loading} />}</div></section>
     </div>}
   </div>
 }
